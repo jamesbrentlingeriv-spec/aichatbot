@@ -2,15 +2,19 @@ import { useState } from 'react';
 import type { Character, AppSettings } from '../types';
 import { AVAILABLE_MODELS } from '../types';
 import { CharacterForm } from './CharacterForm';
+import type { ThemeId } from '../theme';
+import { THEMES } from '../theme';
 
 interface SidebarProps {
   characters: Character[];
   activeCharacterId: string | null;
   settings: AppSettings;
+  theme: ThemeId;
   onSelectCharacter: (id: string) => void;
   onDeleteCharacter: (id: string) => void;
   onSaveCharacter: (character: Character) => void;
   onUpdateSettings: (settings: AppSettings) => void;
+  onUpdateTheme: (theme: ThemeId) => void;
   onNewChat: (characterId: string) => void;
   isCollapsed: boolean;
   onToggleCollapse: () => void;
@@ -20,10 +24,12 @@ export function Sidebar({
   characters,
   activeCharacterId,
   settings,
+  theme,
   onSelectCharacter,
   onDeleteCharacter,
   onSaveCharacter,
   onUpdateSettings,
+  onUpdateTheme,
   onNewChat,
   isCollapsed,
   onToggleCollapse,
@@ -45,11 +51,10 @@ export function Sidebar({
 
   return (
     <>
-      {/* Toggle button when collapsed */}
       {isCollapsed && (
         <button
           onClick={onToggleCollapse}
-          className="fixed top-4 left-4 z-50 w-10 h-10 bg-black border border-zinc-800 rounded-xl flex items-center justify-center text-zinc-400 hover:text-white hover:bg-zinc-900 transition-all shadow-lg"
+          className="fixed top-4 left-4 z-50 w-10 h-10 theme-bg border theme-border rounded-xl flex items-center justify-center theme-text-secondary hover:theme-text hover:theme-bg-secondary transition-all shadow-lg"
           title="Open sidebar"
         >
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -58,25 +63,24 @@ export function Sidebar({
         </button>
       )}
 
-      {/* Sidebar */}
       <aside
-        className={`h-full bg-black border-r border-zinc-800 flex flex-col transition-all duration-300 overflow-hidden ${
+        className={`h-full theme-sidebar-bg border-r theme-border flex flex-col transition-all duration-300 overflow-hidden ${
           isCollapsed ? 'w-0 border-r-0' : 'w-80'
         }`}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-4 py-4 border-b border-zinc-800 shrink-0 min-w-0">
+        <div className="flex items-center justify-between px-4 py-4 border-b theme-border shrink-0 min-w-0 theme-header-bg">
           <div className="flex items-center gap-2 min-w-0">
-            <div className="w-7 h-7 bg-zinc-800 border border-zinc-700 rounded-lg flex items-center justify-center text-white text-xs font-bold shrink-0">
+            <div className="w-7 h-7 theme-bg-secondary border theme-border rounded-lg flex items-center justify-center theme-text text-xs font-bold shrink-0">
               AI
             </div>
-            <h1 className="text-sm font-bold text-white truncate">Character Chat</h1>
+            <h1 className="text-sm font-bold theme-text truncate">Character Chat</h1>
           </div>
           <div className="flex items-center gap-1">
             <button
               onClick={() => setShowSettings(!showSettings)}
               className={`w-7 h-7 rounded-lg flex items-center justify-center transition-colors ${
-                showSettings ? 'bg-zinc-800 text-zinc-300' : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-900'
+                showSettings ? 'theme-bg-secondary theme-text' : 'theme-text-tertiary hover:theme-text hover:theme-bg-secondary'
               }`}
               title="Settings"
             >
@@ -87,7 +91,7 @@ export function Sidebar({
             </button>
             <button
               onClick={onToggleCollapse}
-              className="w-7 h-7 rounded-lg flex items-center justify-center text-zinc-500 hover:text-zinc-300 hover:bg-zinc-900 transition-colors"
+              className="w-7 h-7 rounded-lg flex items-center justify-center theme-text-tertiary hover:theme-text hover:theme-bg-secondary transition-colors"
               title="Close sidebar"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -99,9 +103,32 @@ export function Sidebar({
 
         {/* Settings Panel */}
         {showSettings && (
-          <div className="px-4 py-3 border-b border-zinc-800 space-y-3 shrink-0">
+          <div className="px-4 py-3 border-b theme-border space-y-3 shrink-0">
+            {/* Theme Picker */}
             <div>
-              <label className="block text-xs font-semibold text-zinc-500 mb-1 uppercase tracking-wider">
+              <label className="block text-xs font-semibold theme-text-tertiary mb-1 uppercase tracking-wider">
+                Theme
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                {THEMES.map((t) => (
+                  <button
+                    key={t.id}
+                    onClick={() => onUpdateTheme(t.id)}
+                    className={`px-3 py-2 rounded-lg text-xs font-medium transition-all flex items-center gap-2 ${
+                      theme === t.id
+                        ? 'theme-accent-bg theme-accent-text'
+                        : 'theme-bg border theme-border theme-text-secondary hover:theme-bg-secondary'
+                    }`}
+                  >
+                    <span>{t.icon}</span>
+                    <span>{t.name}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold theme-text-tertiary mb-1 uppercase tracking-wider">
                 OpenRouter API Key
               </label>
               <input
@@ -109,17 +136,17 @@ export function Sidebar({
                 value={settings.openRouterApiKey}
                 onChange={(e) => onUpdateSettings({ ...settings, openRouterApiKey: e.target.value })}
                 placeholder="sk-or-v1-..."
-                className="w-full bg-black border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-600 focus:outline-none focus:ring-2 focus:ring-zinc-600 focus:border-zinc-500 transition-all"
+                className="w-full theme-input-bg border theme-input-border rounded-lg px-3 py-2 text-sm theme-text placeholder:theme-text-tertiary focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:border-[var(--accent)] transition-all"
               />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-zinc-500 mb-1 uppercase tracking-wider">
+              <label className="block text-xs font-semibold theme-text-tertiary mb-1 uppercase tracking-wider">
                 Model
               </label>
               <select
                 value={settings.selectedModel}
                 onChange={(e) => onUpdateSettings({ ...settings, selectedModel: e.target.value })}
-                className="w-full bg-black border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-zinc-600 focus:border-zinc-500 transition-all"
+                className="w-full theme-input-bg border theme-input-border rounded-lg px-3 py-2 text-sm theme-text focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:border-[var(--accent)] transition-all"
               >
                 {AVAILABLE_MODELS.map((model) => (
                   <option key={model.id} value={model.id}>
@@ -136,8 +163,8 @@ export function Sidebar({
           {characters.length === 0 && !showCreateForm && (
             <div className="text-center py-8">
               <div className="text-4xl mb-3">🤖</div>
-              <p className="text-zinc-500 text-sm">No characters yet</p>
-              <p className="text-zinc-700 text-xs mt-1">Create your first character to begin</p>
+              <p className="theme-text-secondary text-sm">No characters yet</p>
+              <p className="theme-text-tertiary text-xs mt-1">Create your first character to begin</p>
             </div>
           )}
 
@@ -146,8 +173,8 @@ export function Sidebar({
               key={char.id}
               className={`group relative rounded-xl p-3 cursor-pointer transition-all duration-200 ${
                 activeCharacterId === char.id
-                  ? 'bg-zinc-900 border border-zinc-700'
-                  : 'bg-black border border-zinc-800 hover:bg-zinc-900'
+                  ? 'theme-bg-secondary border theme-border'
+                  : 'theme-bg border theme-border hover:theme-bg-secondary'
               }`}
               onClick={() => onSelectCharacter(char.id)}
             >
@@ -155,14 +182,14 @@ export function Sidebar({
                 <img
                   src={char.avatarUrl}
                   alt={char.name}
-                  className="w-10 h-10 rounded-full object-cover border border-zinc-700 shrink-0"
+                  className="w-10 h-10 rounded-full object-cover border theme-border shrink-0"
                   onError={(e) => {
                     (e.target as HTMLImageElement).src = `https://ui-avatars.com/api/?name=${encodeURIComponent(char.name)}&background=18181b&color=fff&size=80`;
                   }}
                 />
                 <div className="min-w-0 flex-1">
-                  <h3 className="text-sm font-semibold text-zinc-100 truncate">{char.name}</h3>
-                  <p className="text-xs text-zinc-500 truncate mt-0.5">{char.personality.slice(0, 60)}</p>
+                  <h3 className="text-sm font-semibold theme-text truncate">{char.name}</h3>
+                  <p className="text-xs theme-text-tertiary truncate mt-0.5">{char.personality.slice(0, 60)}</p>
                 </div>
               </div>
 
@@ -173,7 +200,7 @@ export function Sidebar({
                     e.stopPropagation();
                     onNewChat(char.id);
                   }}
-                  className="w-6 h-6 bg-zinc-800 hover:bg-zinc-700 rounded-md flex items-center justify-center text-zinc-400 hover:text-white transition-colors"
+                  className="w-6 h-6 theme-bg-tertiary hover:theme-bg-secondary rounded-md flex items-center justify-center theme-text-secondary hover:theme-text transition-colors"
                   title="New chat"
                 >
                   <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -185,7 +212,7 @@ export function Sidebar({
                     e.stopPropagation();
                     startEdit(char);
                   }}
-                  className="w-6 h-6 bg-zinc-800 hover:bg-zinc-700 rounded-md flex items-center justify-center text-zinc-400 hover:text-white transition-colors"
+                  className="w-6 h-6 theme-bg-tertiary hover:theme-bg-secondary rounded-md flex items-center justify-center theme-text-secondary hover:theme-text transition-colors"
                   title="Edit character"
                 >
                   <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -211,9 +238,9 @@ export function Sidebar({
 
         {/* Create/Edit form */}
         {showCreateForm && (
-          <div className="px-4 py-3 border-t border-zinc-800 overflow-y-auto shrink-0 max-h-[60%]">
+          <div className="px-4 py-3 border-t theme-border overflow-y-auto shrink-0 max-h-[60%]">
             <div className="flex items-center justify-between mb-3">
-              <h2 className="text-xs font-bold text-zinc-400 uppercase tracking-wider">
+              <h2 className="text-xs font-bold theme-text-tertiary uppercase tracking-wider">
                 {editingCharacter ? 'Edit Character' : 'New Character'}
               </h2>
               <button
@@ -221,7 +248,7 @@ export function Sidebar({
                   setShowCreateForm(false);
                   setEditingCharacter(null);
                 }}
-                className="text-zinc-500 hover:text-zinc-300 transition-colors"
+                className="theme-text-tertiary hover:theme-text transition-colors"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -242,10 +269,10 @@ export function Sidebar({
 
         {/* Create button */}
         {!showCreateForm && (
-          <div className="px-4 py-3 border-t border-zinc-800 shrink-0">
+          <div className="px-4 py-3 border-t theme-border shrink-0">
             <button
               onClick={() => setShowCreateForm(true)}
-              className="w-full py-2.5 bg-white hover:bg-zinc-200 text-black text-sm font-semibold rounded-lg transition-all duration-200 flex items-center justify-center gap-2"
+              className="w-full py-2.5 theme-accent-bg hover:opacity-90 theme-accent-text text-sm font-semibold rounded-lg transition-all duration-200 flex items-center justify-center gap-2"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
