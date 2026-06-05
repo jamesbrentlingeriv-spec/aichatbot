@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
-import type { Character, Message, AppSettings } from './types';
-import { DEFAULT_MODEL } from './types';
+import type { Character, Message, Conversation, AppSettings } from './types';
+import { DEFAULT_MODEL, LOCAL_LLM_PLACEHOLDER } from './types';
 import { useLocalStorage } from './hooks/useLocalStorage';
 import { useOpenRouter } from './hooks/useOpenRouter';
 import { Sidebar } from './components/Sidebar';
@@ -12,16 +12,81 @@ import { DEFAULT_THEME } from './theme';
 const DEFAULT_SETTINGS: AppSettings = {
   openRouterApiKey: '',
   selectedModel: DEFAULT_MODEL,
+  useLocalLLM: false,
+  localLLMEndpoint: LOCAL_LLM_PLACEHOLDER,
 };
 
 function App() {
   const [characters, setCharacters] = useLocalStorage<Character[]>('aichatbot-characters', []);
+  const [conversations, setConversations] = useLocalStorage<Conversation[]>('aichatbot-conversations', []);
   const [messages, setMessages] = useLocalStorage<Message[]>('aichatbot-messages', []);
   const [settings, setSettings] = useLocalStorage<AppSettings>('aichatbot-settings', DEFAULT_SETTINGS);
   const [theme, setTheme] = useLocalStorage<ThemeId>('aichatbot-theme', DEFAULT_THEME);
   const [activeCharacterId, setActiveCharacterId] = useState<string | null>(null);
+  const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
-  const { sendMessage, isGenerating, abortGeneration, error } = useOpenRouter();
+  const { sendMessage, isGenerating, abortGeneration, error, clearError } = useOpenRouter();
+
+  // Data migration: convert old messages (no conversationId) to conversations
+  useEffect(() => {
+    const migrationKey = 'aichatbot-migration-v2';
+    if (localStorage.getItem(migrationKey)) return;
+
+    const storedMessages = localStorage.getItem('aichatbot-messages');
+    if (!storedMessages) {
+      localStorage.setItem(migrationKey, 'done');
+      return;
+    }
+
+    try {
+      const oldMessages: Message[] = JSON.parse(storedMessages);
+      const hasOldFormat = oldMessages.some((m) => !m.conversationId);
+      if (!hasOldFormat) {
+        localStorage.setItem(migrationKey, 'done');
+        return;
+      }
+
+      // Group old messages by characterId, create a conversation per character
+      const characterIds = [...new Set(oldMessages.map((m) => m.characterId))];
+      const newConversations: Conversation[] = [];
+      const migratedMessages: Message[] = [];
+
+      for (const charId of characterIds) {
+        const charMessages = oldMessages.filter((m) => m.characterId === charId);
+        if (charMessages.length === 0) continue;
+
+        const now = Date.now();
+        const convId = crypto.randomUUID();
+        newConversations.push({
+          id: convId,
+          characterId: charId,
+          name: `Chat ${new Date(now).toLocaleDateString([], { month: 'short', day: 'numeric' })}`,
+          createdAt: now,
+          updatedAt: now,
+        });
+
+        for (const msg of charMessages) {
+          migratedMessages.push({
+            ...msg,
+            conversationId: convId,
+          });
+        }
+      }
+
+      // Merge any new-format messages that already exist
+      const newFormatMessages = oldMessages.filter((m) => m.conversationId);
+      const allMessages = [...migratedMessages, ...newFormatMessages];
+
+      localStorage.setItem('aichatbot-conversations', JSON.stringify(newConversations));
+      localStorage.setItem('aichatbot-messages', JSON.stringify(allMessages));
+      localStorage.setItem(migrationKey, 'done');
+
+      // Reload state from localStorage
+      window.location.reload();
+    } catch {
+      // Ignore migration errors
+    }
+  }, []);
 
   // Apply theme to document
   useEffect(() => {
@@ -41,12 +106,37 @@ function App() {
 
   const activeCharacter = characters.find((c) => c.id === activeCharacterId) ?? null;
 
+  // Get conversations for the active character
+  const characterConversations = conversations.filter((c) => c.characterId === activeCharacterId);
+  // Get messages for the active conversation
+  const activeConversationMessages = messages.filter((m) => m.conversationId === activeConversationId);
+
+  // When selecting a character, auto-select the most recent conversation or create one
   const handleSelectCharacter = useCallback((id: string) => {
     setActiveCharacterId(id);
+    // Find the most recent conversation for this character
+    const existingConversations = conversations.filter((c) => c.characterId === id);
+    if (existingConversations.length > 0) {
+      // Select the most recently updated conversation
+      const sorted = [...existingConversations].sort((a, b) => b.updatedAt - a.updatedAt);
+      setActiveConversationId(sorted[0].id);
+    } else {
+      // Auto-create a new conversation so the user can start typing immediately
+      const now = Date.now();
+      const newConversation: Conversation = {
+        id: crypto.randomUUID(),
+        characterId: id,
+        name: `Chat ${new Date(now).toLocaleDateString([], { month: 'short', day: 'numeric' })}`,
+        createdAt: now,
+        updatedAt: now,
+      };
+      setConversations((prev) => [...prev, newConversation]);
+      setActiveConversationId(newConversation.id);
+    }
     if (window.innerWidth < 768) {
       setMobileDrawerOpen(false);
     }
-  }, []);
+  }, [conversations, setConversations]);
 
   const handleSaveCharacter = useCallback(
     (character: Character) => {
@@ -70,37 +160,87 @@ function App() {
   const handleDeleteCharacter = useCallback(
     (id: string) => {
       setCharacters((prev) => prev.filter((c) => c.id !== id));
+      setConversations((prev) => prev.filter((c) => c.characterId !== id));
       setMessages((prev) => prev.filter((m) => m.characterId !== id));
       if (activeCharacterId === id) {
         setActiveCharacterId(null);
+        setActiveConversationId(null);
       }
     },
-    [setCharacters, setMessages, activeCharacterId]
+    [setCharacters, setConversations, setMessages, activeCharacterId]
   );
 
   const handleNewChat = useCallback(
     (characterId: string) => {
-      setMessages((prev) => prev.filter((m) => m.characterId !== characterId));
+      const now = Date.now();
+      const newConversation: Conversation = {
+        id: crypto.randomUUID(),
+        characterId,
+        name: `Chat ${new Date(now).toLocaleDateString([], { month: 'short', day: 'numeric' })} ${new Date(now).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`,
+        createdAt: now,
+        updatedAt: now,
+      };
+      setConversations((prev) => [...prev, newConversation]);
+      setActiveConversationId(newConversation.id);
       setActiveCharacterId(characterId);
       if (window.innerWidth < 768) {
         setMobileDrawerOpen(false);
       }
     },
-    [setMessages]
+    [setConversations]
+  );
+
+  const handleSelectConversation = useCallback((conversationId: string) => {
+    setActiveConversationId(conversationId);
+    const conv = conversations.find((c) => c.id === conversationId);
+    if (conv) {
+      setActiveCharacterId(conv.characterId);
+    }
+  }, [conversations]);
+
+  const handleDeleteConversation = useCallback(
+    (conversationId: string) => {
+      if (!confirm('Delete this conversation?')) return;
+      setConversations((prev) => prev.filter((c) => c.id !== conversationId));
+      setMessages((prev) => prev.filter((m) => m.conversationId !== conversationId));
+      if (activeConversationId === conversationId) {
+        // Find another conversation for the same character
+        const remaining = conversations.filter(
+          (c) => c.characterId === (conversations.find((cc) => cc.id === conversationId)?.characterId ?? '') && c.id !== conversationId
+        );
+        if (remaining.length > 0) {
+          const sorted = [...remaining].sort((a, b) => b.updatedAt - a.updatedAt);
+          setActiveConversationId(sorted[0].id);
+        } else {
+          setActiveConversationId(null);
+        }
+      }
+    },
+    [setConversations, setMessages, activeConversationId, conversations]
   );
 
   const handleSendMessage = useCallback(
     async (content: string, imageUrl?: string) => {
-      if (!activeCharacter) return;
+      if (!activeCharacter || !activeConversationId) return;
+
+      const now = Date.now();
 
       const userMessage: Message = {
         id: crypto.randomUUID(),
         characterId: activeCharacter.id,
+        conversationId: activeConversationId,
         role: 'user',
         content,
-        timestamp: Date.now(),
+        timestamp: now,
         imageUrl,
       };
+
+      // Update conversation timestamp
+      setConversations((prev) =>
+        prev.map((c) =>
+          c.id === activeConversationId ? { ...c, updatedAt: now } : c
+        )
+      );
 
       setMessages((prev) => [...prev, userMessage]);
 
@@ -108,7 +248,7 @@ function App() {
         const response = await sendMessage(
           content,
           activeCharacter,
-          [...messages, userMessage],
+          [...activeConversationMessages, userMessage],
           settings,
           imageUrl
         );
@@ -117,6 +257,7 @@ function App() {
           const assistantMessage: Message = {
             id: crypto.randomUUID(),
             characterId: activeCharacter.id,
+            conversationId: activeConversationId,
             role: 'assistant',
             content: response,
             timestamp: Date.now(),
@@ -127,6 +268,7 @@ function App() {
         const errorMessage: Message = {
           id: crypto.randomUUID(),
           characterId: activeCharacter.id,
+          conversationId: activeConversationId,
           role: 'assistant',
           content: `*[Error: ${err instanceof Error ? err.message : 'Failed to get response'}]`,
           timestamp: Date.now(),
@@ -134,14 +276,21 @@ function App() {
         setMessages((prev) => [...prev, errorMessage]);
       }
     },
-    [activeCharacter, messages, settings, sendMessage, setMessages]
+    [activeCharacter, activeConversationId, activeConversationMessages, settings, sendMessage, setMessages, setConversations]
+  );
+
+  const handleDeleteMessage = useCallback(
+    (messageId: string) => {
+      setMessages((prev) => prev.filter((m) => m.id !== messageId));
+    },
+    [setMessages]
   );
 
   const handleClearChat = useCallback(() => {
-    if (activeCharacter && confirm('Clear this conversation?')) {
-      setMessages((prev) => prev.filter((m) => m.characterId !== activeCharacter.id));
+    if (activeConversationId && confirm('Clear this conversation?')) {
+      setMessages((prev) => prev.filter((m) => m.conversationId !== activeConversationId));
     }
-  }, [activeCharacter, setMessages]);
+  }, [activeConversationId, setMessages]);
 
   const toggleMobileDrawer = useCallback(() => {
     setMobileDrawerOpen((prev) => !prev);
@@ -161,7 +310,7 @@ function App() {
               </svg>
               <p className="flex-1">{error}</p>
               <button
-                onClick={() => setSettings({ ...settings })}
+                onClick={clearError}
                 className="text-red-400 hover:text-white transition-colors"
               >
                 ✕
@@ -220,11 +369,17 @@ function App() {
             <ChatInterface
               key={activeCharacter.id}
               character={activeCharacter}
-              messages={messages}
+              messages={activeConversationMessages}
+              conversations={characterConversations}
+              activeConversationId={activeConversationId}
               isGenerating={isGenerating}
               onSendMessage={handleSendMessage}
               onStopGeneration={abortGeneration}
               onClearChat={handleClearChat}
+              onDeleteMessage={handleDeleteMessage}
+              onSelectConversation={handleSelectConversation}
+              onDeleteConversation={handleDeleteConversation}
+              onNewConversation={() => handleNewChat(activeCharacter.id)}
               onToggleSidebar={toggleMobileDrawer}
             />
           ) : (

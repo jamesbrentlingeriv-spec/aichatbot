@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { Character, AppSettings } from '../types';
-import { AVAILABLE_MODELS } from '../types';
+import { AVAILABLE_MODELS, LOCAL_LLM_PLACEHOLDER } from '../types';
 import { CharacterForm } from './CharacterForm';
 import type { ThemeId } from '../theme';
 import { THEMES } from '../theme';
@@ -104,6 +104,35 @@ export function Sidebar({
         {/* Settings Panel */}
         {showSettings && (
           <div className="px-4 py-3 border-b theme-border space-y-3 shrink-0">
+            {/* Local LLM Toggle */}
+            <div>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={settings.useLocalLLM}
+                  onChange={(e) => onUpdateSettings({ ...settings, useLocalLLM: e.target.checked })}
+                  className="w-4 h-4 theme-accent-bg border theme-border rounded"
+                />
+                <span className="text-xs font-semibold theme-text">Use Local LLM (PocketPal/llama.cpp)</span>
+              </label>
+            </div>
+
+            {settings.useLocalLLM && (
+              <div>
+                <label className="block text-xs font-semibold theme-text-tertiary mb-1 uppercase tracking-wider">
+                  Local LLM Endpoint
+                </label>
+                <input
+                  type="text"
+                  value={settings.localLLMEndpoint || ''}
+                  onChange={(e) => onUpdateSettings({ ...settings, localLLMEndpoint: e.target.value })}
+                  placeholder={LOCAL_LLM_PLACEHOLDER}
+                  className="w-full theme-input-bg border theme-input-border rounded-lg px-3 py-2 text-sm theme-text placeholder:theme-text-tertiary focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:border-[var(--accent)] transition-all"
+                />
+                <p className="text-xs theme-text-tertiary mt-1">e.g., http://127.0.0.1:8080/completion</p>
+              </div>
+            )}
+
             {/* Theme Picker */}
             <div>
               <label className="block text-xs font-semibold theme-text-tertiary mb-1 uppercase tracking-wider">
@@ -127,34 +156,38 @@ export function Sidebar({
               </div>
             </div>
 
-            <div>
-              <label className="block text-xs font-semibold theme-text-tertiary mb-1 uppercase tracking-wider">
-                OpenRouter API Key
-              </label>
-              <input
-                type="password"
-                value={settings.openRouterApiKey}
-                onChange={(e) => onUpdateSettings({ ...settings, openRouterApiKey: e.target.value })}
-                placeholder="sk-or-v1-..."
-                className="w-full theme-input-bg border theme-input-border rounded-lg px-3 py-2 text-sm theme-text placeholder:theme-text-tertiary focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:border-[var(--accent)] transition-all"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold theme-text-tertiary mb-1 uppercase tracking-wider">
-                Model
-              </label>
-              <select
-                value={settings.selectedModel}
-                onChange={(e) => onUpdateSettings({ ...settings, selectedModel: e.target.value })}
-                className="w-full theme-input-bg border theme-input-border rounded-lg px-3 py-2 text-sm theme-text focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:border-[var(--accent)] transition-all"
-              >
-                {AVAILABLE_MODELS.map((model) => (
-                  <option key={model.id} value={model.id}>
-                    {model.name}
-                  </option>
-                ))}
-              </select>
-            </div>
+            {!settings.useLocalLLM && (
+              <>
+                <div>
+                  <label className="block text-xs font-semibold theme-text-tertiary mb-1 uppercase tracking-wider">
+                    OpenRouter API Key
+                  </label>
+                  <input
+                    type="password"
+                    value={settings.openRouterApiKey}
+                    onChange={(e) => onUpdateSettings({ ...settings, openRouterApiKey: e.target.value })}
+                    placeholder="sk-or-v1-..."
+                    className="w-full theme-input-bg border theme-input-border rounded-lg px-3 py-2 text-sm theme-text placeholder:theme-text-tertiary focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:border-[var(--accent)] transition-all"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold theme-text-tertiary mb-1 uppercase tracking-wider">
+                    Model
+                  </label>
+                  <select
+                    value={settings.selectedModel}
+                    onChange={(e) => onUpdateSettings({ ...settings, selectedModel: e.target.value })}
+                    className="w-full theme-input-bg border theme-input-border rounded-lg px-3 py-2 text-sm theme-text focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:border-[var(--accent)] transition-all"
+                  >
+                    {AVAILABLE_MODELS.map((model) => (
+                      <option key={model.id} value={model.id}>
+                        {model.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </>
+            )}
           </div>
         )}
 

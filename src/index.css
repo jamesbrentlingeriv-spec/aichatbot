@@ -10,10 +10,34 @@ html, body, #root {
 
 body {
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  background-color: #000000;
+  color: #ffffff;
+}
+
+@layer theme {
+  :root {
+    --color-red-300: #fca5a5;
+    --color-red-400: #f87171;
+    --color-red-500: #ef4444;
+    --color-red-800: #991b1b;
+    --color-red-900: #7f1d1d;
+    --color-red-950: #450a0a;
+    --color-zinc-100: #f4f4f5;
+    --color-zinc-200: #e4e4e7;
+    --color-zinc-300: #d4d4d8;
+    --color-zinc-400: #a1a1aa;
+    --color-zinc-500: #71717a;
+    --color-zinc-600: #52525b;
+    --color-zinc-700: #3f3f46;
+    --color-zinc-800: #27272a;
+    --color-zinc-900: #18181b;
+  }
 }
 
 /* ===== Theme CSS Variables ===== */
-:root,
+
+/* Default dark theme for immediate rendering */
+
 [data-theme="dark"] {
   --bg-primary: #000000;
   --bg-secondary: #18181b;
@@ -124,7 +148,6 @@ body {
   --overlay: rgba(0, 10, 0, 0.7);
   --splash-bg: #0a0a0a;
   --splash-border: #1a3a1a;
-  font-family: 'Courier New', 'Consolas', 'Monaco', monospace;
 }
 
 /* ===== Global styles using variables ===== */
