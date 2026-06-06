@@ -16,10 +16,10 @@ interface UseOpenRouterReturn {
   clearError: () => void;
 }
 
-const THINKING_DELAY_MIN = 800;  // ms
-const THINKING_DELAY_MAX = 2200; // ms
-const READING_DELAY_MIN = 400;   // ms
-const READING_DELAY_MAX = 1200;  // ms
+const THINKING_DELAY_MIN = 0;    // ms - removed artificial delay
+const THINKING_DELAY_MAX = 0;    // ms - removed artificial delay
+const READING_DELAY_MIN = 0;     // ms - removed artificial delay
+const READING_DELAY_MAX = 0;     // ms - removed artificial delay
 
 function getRandomDelay(min: number, max: number): number {
   return Math.floor(Math.random() * (max - min + 1)) + min;

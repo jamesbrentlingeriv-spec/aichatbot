@@ -42,6 +42,7 @@ export interface AppSettings {
   localLLMEndpoint: string;
   geminiLiveApiKey?: string;
   useVoiceChat?: boolean;
+  randomMode?: 'normal' | 'erotic';
 }
 
 // Voice chat types

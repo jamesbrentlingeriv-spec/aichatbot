@@ -16,6 +16,7 @@ interface SidebarProps {
   onUpdateSettings: (settings: AppSettings) => void;
   onUpdateTheme: (theme: ThemeId) => void;
   onNewChat: (characterId: string) => void;
+  onRandomCharacter: (mode: 'normal' | 'erotic') => void;
   isCollapsed: boolean;
   onToggleCollapse: () => void;
 }
@@ -31,12 +32,15 @@ export function Sidebar({
   onUpdateSettings,
   onUpdateTheme,
   onNewChat,
+  onRandomCharacter,
   isCollapsed,
   onToggleCollapse,
 }: SidebarProps) {
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [editingCharacter, setEditingCharacter] = useState<Character | null>(null);
   const [showSettings, setShowSettings] = useState(false);
+  const [isGeneratingRandom, setIsGeneratingRandom] = useState(false);
+  const [randomMode, setRandomMode] = useState<'normal' | 'erotic'>('normal');
 
   const handleSave = (character: Character) => {
     onSaveCharacter(character);
@@ -154,6 +158,44 @@ export function Sidebar({
                   </button>
                 ))}
               </div>
+            </div>
+
+             {/* Voice Settings */}
+            <div className="border-t theme-border pt-3">
+              <div className="flex items-center gap-2 mb-2">
+                <svg className="w-4 h-4 theme-text-tertiary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+                <span className="text-xs font-semibold theme-text-tertiary uppercase tracking-wider">Voice (Phone Calls)</span>
+              </div>
+              <label className="flex items-center gap-2 cursor-pointer mb-2">
+                <input
+                  type="checkbox"
+                  checked={settings.useVoiceChat ?? false}
+                  onChange={(e) => onUpdateSettings({ ...settings, useVoiceChat: e.target.checked })}
+                  className="w-4 h-4 theme-accent-bg border theme-border rounded"
+                />
+                <span className="text-xs font-semibold theme-text">Enable Voice Calls</span>
+              </label>
+              {(settings.useVoiceChat ?? false) && (
+                <div className="mb-2">
+                  <label className="block text-xs font-semibold theme-text-tertiary mb-1">
+                    Gemini API Key
+                  </label>
+                  <input
+                    type="password"
+                    value={settings.geminiLiveApiKey ?? ''}
+                    onChange={(e) => onUpdateSettings({ ...settings, geminiLiveApiKey: e.target.value })}
+                    placeholder="AIza..."
+                    className="w-full theme-input-bg border theme-input-border rounded-lg px-3 py-2 text-sm theme-text placeholder:theme-text-tertiary focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:border-[var(--accent)] transition-all"
+                  />
+                  <p className="text-xs theme-text-tertiary mt-1">Get key at aistudio.google.com</p>
+                </div>
+              )}
+              {!settings.openRouterApiKey && (
+                <p className="text-[10px] text-yellow-500 mt-1">Voice uses Gemini API. Set key or also set OpenRouter key as fallback.</p>
+              )}
             </div>
 
             {!settings.useLocalLLM && (
@@ -300,9 +342,60 @@ export function Sidebar({
           </div>
         )}
 
+        {/* Random Character Generator */}
+        {!showCreateForm && (
+          <div className="px-4 py-2 border-t theme-border shrink-0 space-y-2">
+            <div className="flex items-center gap-2">
+              <svg className="w-4 h-4 theme-text-tertiary shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+              </svg>
+              <span className="text-[10px] font-bold theme-text-tertiary uppercase tracking-wider">Random Character</span>
+            </div>
+            <div className="flex gap-1.5">
+              <button
+                onClick={() => {
+                  setRandomMode('normal');
+                  setIsGeneratingRandom(true);
+                  onRandomCharacter('normal');
+                  setTimeout(() => setIsGeneratingRandom(false), 5000);
+                }}
+                disabled={isGeneratingRandom || !settings.openRouterApiKey}
+                className="flex-1 py-2 text-[11px] font-semibold rounded-lg transition-all duration-200 flex items-center justify-center gap-1.5 bg-blue-950 hover:bg-blue-900 text-blue-300 border border-blue-800 disabled:opacity-40 disabled:cursor-not-allowed"
+                title="Generate a random normal character"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+                Normal
+              </button>
+              <button
+                onClick={() => {
+                  setRandomMode('erotic');
+                  setIsGeneratingRandom(true);
+                  onRandomCharacter('erotic');
+                  setTimeout(() => setIsGeneratingRandom(false), 5000);
+                }}
+                disabled={isGeneratingRandom || !settings.openRouterApiKey}
+                className="flex-1 py-2 text-[11px] font-semibold rounded-lg transition-all duration-200 flex items-center justify-center gap-1.5 bg-red-950 hover:bg-red-900 text-red-300 border border-red-800 disabled:opacity-40 disabled:cursor-not-allowed"
+                title="Generate a random romance/erotic character"
+              >
+                <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z" />
+                </svg>
+                Erotic
+              </button>
+            </div>
+            {isGeneratingRandom && (
+              <p className="text-[10px] theme-text-tertiary text-center animate-pulse">
+                Generating {randomMode === 'erotic' ? 'romance' : 'normal'} character...
+              </p>
+            )}
+          </div>
+        )}
+
         {/* Create button */}
         {!showCreateForm && (
-          <div className="px-4 py-3 border-t theme-border shrink-0">
+          <div className="px-4 py-2 border-t theme-border shrink-0">
             <button
               onClick={() => setShowCreateForm(true)}
               className="w-full py-2.5 theme-accent-bg hover:opacity-90 theme-accent-text text-sm font-semibold rounded-lg transition-all duration-200 flex items-center justify-center gap-2"

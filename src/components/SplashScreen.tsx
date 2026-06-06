@@ -8,8 +8,8 @@ export function SplashScreen() {
     const timer = setTimeout(() => {
       setFading(true);
       // After the fade-out transition completes, unmount
-      setTimeout(() => setVisible(false), 500);
-    }, 1500);
+      setTimeout(() => setVisible(false), 300);
+    }, 600);
 
     return () => clearTimeout(timer);
   }, []);

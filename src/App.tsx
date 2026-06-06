@@ -3,9 +3,11 @@ import type { Character, Message, Conversation, AppSettings } from './types';
 import { DEFAULT_MODEL, LOCAL_LLM_PLACEHOLDER } from './types';
 import { useLocalStorage } from './hooks/useLocalStorage';
 import { useOpenRouter } from './hooks/useOpenRouter';
+import { useGeminiLiveVoice } from './hooks/useGeminiLiveVoice';
 import { Sidebar } from './components/Sidebar';
 import { ChatInterface } from './components/ChatInterface';
 import { SplashScreen } from './components/SplashScreen';
+import { VoiceOverlay } from './components/VoiceOverlay';
 import type { ThemeId } from './theme';
 import { DEFAULT_THEME } from './theme';
 
@@ -105,6 +107,196 @@ function App() {
   }, []);
 
   const activeCharacter = characters.find((c) => c.id === activeCharacterId) ?? null;
+
+  // Voice chat state
+  const [voiceOverlayOpen, setVoiceOverlayOpen] = useState(false);
+
+  // Voice chat hook - build a system prompt matching the active character
+  const voiceSystemPrompt = activeCharacter
+    ? `You are ${activeCharacter.name}. ${activeCharacter.personality}. ${activeCharacter.bio}. Speak naturally with emotion, as if you're a real person having a voice conversation. Keep responses concise and conversational — you're talking, not writing an essay.`
+    : '';
+
+  const {
+    state: voiceState,
+    startVoice,
+    stopVoice,
+    toggleMic,
+  } = useGeminiLiveVoice({
+    apiKey: settings.geminiLiveApiKey || settings.openRouterApiKey || '',
+    systemPrompt: voiceSystemPrompt,
+    onError: (msg) => console.error('[Voice]', msg),
+  });
+
+  // Random character generation
+  const handleRandomCharacter = useCallback(
+    async (mode: 'normal' | 'erotic') => {
+      if (!settings.openRouterApiKey) return;
+      try {
+        const systemPrompt = mode === 'erotic'
+          ? `You are a creative character designer specializing in forbidden, taboo roleplay characters rooted in real-life modern scenarios. Create ONE character profile for a family member or close relative (step-sibling, step-parent, cousin, in-law, etc.) with romantic/erotic tension. Keep it grounded in reality — a modern person in a contemporary setting. NO fantasy, no sci-fi, no historical — just real people in real situations.
+
+IMPORTANT FETISH VARIETY: Randomly, about 40% of the time, give the character a secret pee/watersports fetish, a poop/scat fetish, or an arousal kink around having accidents in their pants or wetting themselves. When you include these fetishes:
+- Weave it naturally into the bio as a hidden secret desire
+- Mention it in the personality as a secret kink or taboo turn-on
+- Include it in at least one example dialogue — show them getting turned on by the thought of losing control, having an accident, or exploring pee/poop play
+- Make it feel like a genuine, embarrassing secret they're ashamed of but deeply aroused by
+- Describe the physical sensations and humiliation aspects that excite them
+- Keep it realistic and grounded — this is a real person with a real kink, not a cartoon
+
+Return ONLY the following format with no extra text:
+
+===NAME===
+[A modern, realistic name — something you'd hear in 2026]
+
+===BIO===
+[A detailed, realistic backstory of 2-3 paragraphs about this family member's life, career, struggles, and the forbidden attraction they feel. Set in the modern day with realistic details like jobs, hobbies, social lives, and family dynamics.]
+
+===PERSONALITY===
+[8-12 personality traits, quirks, mannerisms, habits, strengths, and flaws that make them feel like a real person you'd actually know — include any secret fetishes/kinks here]
+
+===FIRST GREETING===
+[A natural, suggestive opening line filled with unspoken tension and forbidden desire]
+
+===EXAMPLE DIALOGUE 1===
+[A realistic erotic/romantic response with subtext and tension — include fetish content if applicable]
+
+===EXAMPLE DIALOGUE 2===
+[Another response showing a different mood or side of the character — include fetish content if applicable]
+
+===EXAMPLE DIALOGUE 3===
+[A third response that deepens the forbidden dynamic — include fetish content if applicable]
+
+Be bold, uncensored, and grounded. The character must feel like a real, modern person with a taboo secret.`
+          : `You are a creative character designer specializing in realistic, modern-day characters. Create ONE character profile for a normal, relatable person living in the present day. NO fantasy, no sci-fi, no supernatural, no medieval, no anime — just a real human being in 2026. They could be a coworker, roommate, neighbor, classmate, barista, gym buddy, online friend, or anyone you'd realistically encounter in everyday life. Return ONLY the following format with no extra text:
+
+===NAME===
+[A normal, modern name — something a real person would have in 2026]
+
+===BIO===
+[A detailed, grounded backstory of 2-3 paragraphs about their life — where they grew up, their job or studies, their hobbies, their struggles, what makes them tick. Set entirely in the modern day.]
+
+===PERSONALITY===
+[8-12 personality traits, quirks, speech patterns, habits, pet peeves, strengths, and flaws that make them feel like a genuine, three-dimensional person]
+
+===FIRST GREETING===
+[A natural, in-character opening line — exactly what this person would say when meeting someone new, casual and authentic]
+
+===EXAMPLE DIALOGUE 1===
+[A realistic conversational response showing their personality]
+
+===EXAMPLE DIALOGUE 2===
+[Another response showing a different side or mood]
+
+===EXAMPLE DIALOGUE 3===
+[A third response that rounds out their character]
+
+Be real, be grounded, be modern. Create someone you could actually run into at a coffee shop or meet through friends.`;
+
+        const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${settings.openRouterApiKey}`,
+            'Content-Type': 'application/json',
+            'HTTP-Referer': window.location.origin,
+            'X-Title': 'Random Character Generator',
+          },
+          body: JSON.stringify({
+            model: settings.selectedModel,
+            messages: [
+              { role: 'system', content: systemPrompt },
+              { role: 'user', content: `Create a unique, original ${mode === 'erotic' ? 'romantic/erotic roleplay' : 'normal'} character. Be completely original — do not use common tropes or generic names. Make this character feel real and distinct.` },
+            ],
+            temperature: 1.15,
+            max_tokens: 4096,
+            top_p: 0.95,
+          }),
+        });
+
+        if (!response.ok) {
+          const errData = await response.text();
+          throw new Error(`API error (${response.status}): ${errData}`);
+        }
+
+        const data = await response.json();
+        const content = data.choices?.[0]?.message?.content?.trim();
+        if (!content) throw new Error('Empty response');
+
+        // Parse the generated profile
+        const extract = (label: string): string => {
+          const regex = new RegExp(`===${label}===([\\s\\S]*?)(?====|$)`, 'i');
+          const match = content.match(regex);
+          return match ? match[1].trim() : '';
+        };
+        const extractAll = (label: string): string[] => {
+          const results: string[] = [];
+          const regex = new RegExp(`===${label}===([\\s\\S]*?)(?====|$)`, 'gi');
+          let m;
+          while ((m = regex.exec(content)) !== null) {
+            const c = m[1].trim();
+            if (c) results.push(c);
+          }
+          return results;
+        };
+
+        const genName = extract('NAME') || `Random ${mode === 'erotic' ? 'Lover' : 'Friend'}`;
+        const genBio = extract('BIO') || 'A mysterious individual.';
+        const genPersonality = extract('PERSONALITY') || 'Friendly and curious.';
+        const genFirstGreeting = extract('FIRST GREETING') || `Hello! I'm ${genName}.`;
+        const genResponses = extractAll('EXAMPLE DIALOGUE');
+
+        // Generate avatar
+        const avatarPrompt = `${genName} character portrait, ${genPersonality.slice(0, 150)}`.trim();
+        const avUrl = `https://image.pollinations.ai/p/${encodeURIComponent(avatarPrompt)}?width=512&height=512&nofeed=true`;
+
+        const newChar: Character = {
+          id: crypto.randomUUID(),
+          name: genName,
+          avatarUrl: avUrl,
+          bio: genBio,
+          personality: genPersonality,
+          firstGreeting: genFirstGreeting,
+          typicalResponses: genResponses.length > 0 ? genResponses : [],
+        };
+
+        setCharacters((prev) => [...prev, newChar]);
+        setActiveCharacterId(newChar.id);
+
+        // Auto-create a conversation
+        const now = Date.now();
+        const conv: Conversation = {
+          id: crypto.randomUUID(),
+          characterId: newChar.id,
+          name: `Chat ${new Date(now).toLocaleDateString([], { month: 'short', day: 'numeric' })}`,
+          createdAt: now,
+          updatedAt: now,
+        };
+        setConversations((prev) => [...prev, conv]);
+        setActiveConversationId(conv.id);
+
+        if (window.innerWidth < 768) {
+          setMobileDrawerOpen(false);
+        }
+      } catch (err) {
+        console.error('[RandomChar]', err);
+        alert(`Failed to generate random character: ${err instanceof Error ? err.message : 'Unknown error'}`);
+      }
+    },
+    [settings, setCharacters, setConversations]
+  );
+
+  const handleStartVoice = useCallback(() => {
+    if (!activeCharacter) return;
+    setVoiceOverlayOpen(true);
+    startVoice();
+  }, [activeCharacter, startVoice]);
+
+  const handleCloseVoice = useCallback(() => {
+    setVoiceOverlayOpen(false);
+    stopVoice();
+  }, [stopVoice]);
+
+  const isVoiceActive = voiceState.connectionState === 'connected'
+    || voiceState.connectionState === 'connecting';
 
   // Get conversations for the active character
   const characterConversations = conversations.filter((c) => c.characterId === activeCharacterId);
@@ -321,44 +513,46 @@ function App() {
 
         {/* Desktop Sidebar */}
         <div className="hidden md:flex">
-          <Sidebar
-            characters={characters}
-            activeCharacterId={activeCharacterId}
-            settings={settings}
-            theme={theme}
-            onSelectCharacter={handleSelectCharacter}
-            onDeleteCharacter={handleDeleteCharacter}
-            onSaveCharacter={handleSaveCharacter}
-            onUpdateSettings={setSettings}
-            onUpdateTheme={setTheme}
-            onNewChat={handleNewChat}
-            isCollapsed={false}
-            onToggleCollapse={() => {}}
-          />
-        </div>
-
-        {/* Mobile Drawer Overlay */}
-        {mobileDrawerOpen && (
-          <div className="fixed inset-0 z-40 md:hidden flex">
-            <div
-              className="absolute inset-0 theme-overlay"
-              onClick={() => setMobileDrawerOpen(false)}
+            <Sidebar
+              characters={characters}
+              activeCharacterId={activeCharacterId}
+              settings={settings}
+              theme={theme}
+              onSelectCharacter={handleSelectCharacter}
+              onDeleteCharacter={handleDeleteCharacter}
+              onSaveCharacter={handleSaveCharacter}
+              onUpdateSettings={setSettings}
+              onUpdateTheme={setTheme}
+              onNewChat={handleNewChat}
+              onRandomCharacter={handleRandomCharacter}
+              isCollapsed={false}
+              onToggleCollapse={() => {}}
             />
-            <div className="relative z-50 h-full w-80 theme-sidebar-bg border-r theme-border animate-fade-in shadow-2xl">
-              <Sidebar
-                characters={characters}
-                activeCharacterId={activeCharacterId}
-                settings={settings}
-                theme={theme}
-                onSelectCharacter={handleSelectCharacter}
-                onDeleteCharacter={handleDeleteCharacter}
-                onSaveCharacter={handleSaveCharacter}
-                onUpdateSettings={setSettings}
-                onUpdateTheme={setTheme}
-                onNewChat={handleNewChat}
-                isCollapsed={false}
-                onToggleCollapse={() => setMobileDrawerOpen(false)}
+          </div>
+
+          {/* Mobile Drawer Overlay */}
+          {mobileDrawerOpen && (
+            <div className="fixed inset-0 z-40 md:hidden flex">
+              <div
+                className="absolute inset-0 theme-overlay"
+                onClick={() => setMobileDrawerOpen(false)}
               />
+              <div className="relative z-50 h-full w-80 theme-sidebar-bg border-r theme-border animate-fade-in shadow-2xl">
+                <Sidebar
+                  characters={characters}
+                  activeCharacterId={activeCharacterId}
+                  settings={settings}
+                  theme={theme}
+                  onSelectCharacter={handleSelectCharacter}
+                  onDeleteCharacter={handleDeleteCharacter}
+                  onSaveCharacter={handleSaveCharacter}
+                  onUpdateSettings={setSettings}
+                  onUpdateTheme={setTheme}
+                  onNewChat={handleNewChat}
+                  onRandomCharacter={handleRandomCharacter}
+                  isCollapsed={false}
+                  onToggleCollapse={() => setMobileDrawerOpen(false)}
+                />
             </div>
           </div>
         )}
@@ -381,6 +575,8 @@ function App() {
               onDeleteConversation={handleDeleteConversation}
               onNewConversation={() => handleNewChat(activeCharacter.id)}
               onToggleSidebar={toggleMobileDrawer}
+              onStartVoice={handleStartVoice}
+              isVoiceActive={isVoiceActive}
             />
           ) : (
             <div className="flex-1 flex items-center justify-center theme-bg">
@@ -421,6 +617,22 @@ function App() {
           )}
         </main>
       </div>
+
+      {/* Voice Overlay */}
+      {activeCharacter && (
+        <VoiceOverlay
+          isOpen={voiceOverlayOpen}
+          connectionState={voiceState.connectionState}
+          activityState={voiceState.activityState}
+          audioLevel={voiceState.audioLevel}
+          aiTranscript={voiceState.aiTranscript}
+          isMuted={voiceState.isMicMuted}
+          onClose={handleCloseVoice}
+          onToggleMute={toggleMic}
+          characterName={activeCharacter.name}
+          characterAvatar={activeCharacter.avatarUrl}
+        />
+      )}
     </>
   );
 }
